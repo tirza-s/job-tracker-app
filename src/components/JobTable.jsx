@@ -1,34 +1,51 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
 import "../index.css";
 
-const jobData = [
-  {
-    company: "Adobe",
-    role: "UX Resercher",
-    status: "Applied",
-    date: "11-4-2024",
-    // don't store buttons as data — actions should be real functions later
-  },
-  {
-    company: "Herman-Nolan",
-    role: "Web Developer IV",
-    status: "2nd Interview",
-    date: "5-10-2025",
-    // don't store buttons as data — actions should be real functions later
-  },
-  {
-    company: "McGlynn-Rau",
-    role: "Environmental Specialist",
-    status: "Applied",
-    date: "24/06/2025",
-    // don't store buttons as data — actions should be real functions later
-  },
-];
-
 export default function JobTable() {
+  const [jobs, setJobs] = useState([]);
   const navigate = useNavigate();
+  const [expandedJobId, setExpandedJobId] = useState(null);
+
+  const toggleExpand = (jobId) => {
+    setExpandedJobId((prev) => (prev === jobId ? null : jobId));
+  };
+
+  // Fetch jobs from Firestore on first render
+  useEffect(() => {
+    const fetchJobs = async () => {
+      const jobCollection = collection(db, "jobs");
+      const jobSnapshot = await getDocs(jobCollection);
+      const jobList = jobSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setJobs(jobList);
+    };
+
+    fetchJobs();
+  }, []);
+
+  // Make status editable in the table
+  const handleStatusChange = async (jobId, newStatus) => {
+    try {
+      const jobRef = doc(db, "jobs", jobId);
+      await updateDoc(jobRef, { status: newStatus });
+
+      //Update UI state locally for faster feedback
+      setJobs((prevJobs) =>
+        prevJobs.map((job) =>
+          job.id === jobId ? { ...job, status: newStatus } : job
+        )
+      );
+    } catch (error) {
+      alert("Unable updating status, try again", error);
+    }
+  };
+
   return (
     <div className="p-10 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -54,13 +71,63 @@ export default function JobTable() {
             </tr>
           </thead>
           <tbody>
-            {jobData.map((job, index) => (
-              <tr key={index} className="border-t hover:bg-gray-50">
-                <td className="p-2">{job.company}</td>
-                <td className="p-2">{job.role}</td>
-                <td className="p-2">{job.date}</td>
-                <td className="p-2">{job.status}</td>
-              </tr>
+            {jobs.map((job, index) => (
+              <React.Fragment key={job.id}>
+                <tr key={index} className="border-t hover:bg-gray-50">
+                  <td
+                    className="p-2 cursor-pointer text-blue-700 font-semibold hover:underline"
+                    onClick={() => toggleExpand(job.id)}
+                  >
+                    {job.company}
+                  </td>
+                  <td className="p-2">{job.role}</td>
+                  <td className="p-2">{job.date}</td>
+                  <td className="p-2">
+                    <select
+                      value={job.status}
+                      onChange={(e) =>
+                        handleStatusChange(job.id, e.target.value)
+                      }
+                      className="border rounded px-2 py-1 bg-white mt-1"
+                    >
+                      <option value="Applied"> Applied </option>
+                      <option value="Interviewing"> Interviewing </option>
+                      <option value="Offer "> Offer </option>
+                      <option value="Rejected"> Rejected </option>
+                    </select>
+                  </td>
+                </tr>
+                {/* Extra Detail Row */}
+                {expandedJobId === job.id && (
+                  <tr className="border-t bg-gray-50">
+                    <td colSpan="4" className="p-4 text-sm text-gray-700">
+                      {job.link && (
+                        <div className="mb-2">
+                          🔗 <strong>Job Link:</strong>{" "}
+                          <a
+                            href={job.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {job.link}
+                          </a>
+                        </div>
+                      )}
+                      {job.note && (
+                        <div>
+                          📝 <strong>Note:</strong> {job.note}
+                        </div>
+                      )}
+                      {!job.link && !job.note && (
+                        <div className="italic text-gray-400">
+                          No additional info.
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>

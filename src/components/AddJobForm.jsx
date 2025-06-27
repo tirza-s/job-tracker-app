@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { collection, addDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
-export default function AddJobForm() {
+export default function AddJobForm({ onSubmit }) {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("Applied");
@@ -11,7 +13,7 @@ export default function AddJobForm() {
   const [link, setLink] = useState("");
   const [note, setNotes] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const newJob = {
@@ -21,10 +23,20 @@ export default function AddJobForm() {
       date,
       link,
       note,
+      createdAt: new Date(),
     };
 
-    console.log("New application added", newJob);
+    try {
+      await addDoc(collection(db, "jobs"), newJob);
+      console.log("New job added for firestone:", newJob);
+      if (onSubmit) {
+        onSubmit(newJob);
+      }
+    } catch (error) {
+      console.log("Error adding a job to firestore!", error);
+    }
 
+    // reset form
     setCompany("");
     setRole("");
     setStatus("");
